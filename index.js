@@ -1,88 +1,103 @@
-const TelegramBot = require("node-telegram-bot-api");
-const http = require("http");
+const TelegramBot = require('node-telegram-bot-api');
+const express = require('express');
 
-const token = process.env.TOKEN;
+const token = process.env.BOT_TOKEN;
 const bot = new TelegramBot(token, { polling: true });
 
-// lưu user + trạng thái
-let users = {};
-let userState = {};
+// ===== WEB SERVER (fix Render lỗi port) =====
+const app = express();
+app.get("/", (req, res) => res.send("Bot is running"));
+app.listen(process.env.PORT || 3000);
 
-// SERVER giữ Render sống
-const PORT = process.env.PORT || 3000;
-http.createServer((req, res) => {
-  res.end("Bot is running");
-}).listen(PORT);
+// ===== DATA =====
+let users = new Set(); // không bị reset giữa lệnh
+let lastAction = {}; // chống spam
 
-// START
+// ===== KEYBOARD =====
+const keyboard = {
+  reply_markup: {
+    keyboard: [
+      ["📈 Tăng View", "❤️ Tăng Tim"],
+      ["👤 Tăng Follow"],
+      ["📊 Thống kê"]
+    ],
+    resize_keyboard: true
+  }
+};
+
+// ===== START =====
 bot.onText(/\/start/, (msg) => {
-  const chatId = msg.chat.id;
+  users.add(msg.chat.id);
 
-  users[chatId] = true;
-
-  bot.sendMessage(chatId, "🔥 TikTok Boost Bot\nChọn dịch vụ:", {
-    reply_markup: {
-      keyboard: [
-        ["📈 Tăng View", "❤️ Tăng Tim"],
-        ["👤 Tăng Follow"],
-        ["📊 Thống kê"]
-      ],
-      resize_keyboard: true
-    }
-  });
+  bot.sendMessage(
+    msg.chat.id,
+    "🔥 TikTok Boost Bot\nChọn dịch vụ:",
+    keyboard
+  );
 });
 
-// HANDLE BUTTON
-bot.on("message", (msg) => {
-  const chatId = msg.chat.id;
+// ===== CHỐNG SPAM =====
+function isSpam(id) {
+  const now = Date.now();
+  if (lastAction[id] && now - lastAction[id] < 5000) return true;
+  lastAction[id] = now;
+  return false;
+}
+
+// ===== MENU =====
+bot.on("message", async (msg) => {
+  const id = msg.chat.id;
   const text = msg.text;
 
+  if (!text) return;
+
+  users.add(id);
+
+  if (isSpam(id)) {
+    return bot.sendMessage(id, "⏳ Đợi tí rồi dùng tiếp...");
+  }
+
+  // ===== VIEW =====
   if (text === "📈 Tăng View") {
-    userState[chatId] = "view";
-    bot.sendMessage(chatId, "📎 Gửi link TikTok cần tăng view:");
+    return bot.sendMessage(id, "🔗 Gửi link TikTok cần tăng view:");
   }
 
-  else if (text === "❤️ Tăng Tim") {
-    userState[chatId] = "like";
-    bot.sendMessage(chatId, "📎 Gửi link TikTok cần tăng tim:");
+  // ===== LIKE =====
+  if (text === "❤️ Tăng Tim") {
+    return bot.sendMessage(id, "🔗 Gửi link TikTok cần tăng tim:");
   }
 
-  else if (text === "👤 Tăng Follow") {
-    userState[chatId] = "follow";
-    bot.sendMessage(chatId, "📎 Gửi link TikTok cần tăng follow:");
+  // ===== FOLLOW =====
+  if (text === "👤 Tăng Follow") {
+    return bot.sendMessage(id, "🔗 Gửi link TikTok cần tăng follow:");
   }
 
-  else if (text === "📊 Thống kê") {
-    bot.sendMessage(chatId, `👥 Tổng user: ${Object.keys(users).length}`);
+  // ===== STATS =====
+  if (text === "📊 Thống kê") {
+    return bot.sendMessage(
+      id,
+      `👥 Tổng user: ${users.size}`
+    );
   }
 
-  // 👉 xử lý link
-  else if (text.includes("tiktok.com")) {
+  // ===== XỬ LÝ LINK =====
+  if (text.includes("tiktok.com")) {
+    bot.sendMessage(id, "⏳ Đang xử lý...");
 
-    if (!userState[chatId]) {
-      bot.sendMessage(chatId, "⚠️ Hãy chọn dịch vụ trước!");
-      return;
-    }
-
-    bot.sendMessage(chatId, "⏳ Đang xử lý...");
-
+    // fake delay cho giống thật
     setTimeout(() => {
+      const type =
+        text.includes("view") ? "👁 View" :
+        text.includes("like") ? "❤️ Tim" :
+        "🔥 Boost";
 
-      let amount = Math.floor(Math.random() * 5000) + 1000;
+      const amount = Math.floor(Math.random() * 5000) + 1000;
+      const time = Math.floor(Math.random() * 5) + 1;
 
-      let typeText = "";
-      if (userState[chatId] === "view") typeText = "👁 View";
-      if (userState[chatId] === "like") typeText = "❤️ Tim";
-      if (userState[chatId] === "follow") typeText = "👤 Follow";
-
-      bot.sendMessage(chatId,
-`✅ Tăng thành công!
-${typeText}: +${amount}
-⏱ Thời gian: ${Math.floor(Math.random()*5)+1} phút`
+      bot.sendMessage(
+        id,
+        `✅ Tăng thành công!\n${type}: +${amount}\n⏱ Thời gian: ${time} phút`
       );
-
-      userState[chatId] = null;
-
     }, 2000);
   }
 });
