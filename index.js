@@ -4,22 +4,21 @@ const http = require("http");
 const token = process.env.TOKEN;
 const bot = new TelegramBot(token, { polling: true });
 
-// 🌐 SERVER (fix Render)
+// lưu user + trạng thái
+let users = {};
+let userState = {};
+
+// SERVER giữ Render sống
 const PORT = process.env.PORT || 3000;
 http.createServer((req, res) => {
-  res.writeHead(200);
   res.end("Bot is running");
 }).listen(PORT);
 
-// 📦 lưu user
-let users = {};
-
-// 🚀 /start
+// START
 bot.onText(/\/start/, (msg) => {
   const chatId = msg.chat.id;
-  const userId = msg.from.id;
 
-  users[userId] = true;
+  users[chatId] = true;
 
   bot.sendMessage(chatId, "🔥 TikTok Boost Bot\nChọn dịch vụ:", {
     reply_markup: {
@@ -33,45 +32,57 @@ bot.onText(/\/start/, (msg) => {
   });
 });
 
-// 📌 xử lý message
+// HANDLE BUTTON
 bot.on("message", (msg) => {
   const chatId = msg.chat.id;
-  const userId = msg.from.id;
   const text = msg.text;
 
-  if (!text) return;
-  if (text === "/start") return;
-
-  // 📊 thống kê
-  if (text === "📊 Thống kê") {
-    return bot.sendMessage(chatId,
-      `👥 Tổng user: ${Object.keys(users).length}`
-    );
-  }
-
-  // 👉 chọn dịch vụ
   if (text === "📈 Tăng View") {
-    return bot.sendMessage(chatId, "📎 Gửi link TikTok cần tăng view:");
+    userState[chatId] = "view";
+    bot.sendMessage(chatId, "📎 Gửi link TikTok cần tăng view:");
   }
 
-  if (text === "❤️ Tăng Tim") {
-    return bot.sendMessage(chatId, "📎 Gửi link TikTok cần tăng tim:");
+  else if (text === "❤️ Tăng Tim") {
+    userState[chatId] = "like";
+    bot.sendMessage(chatId, "📎 Gửi link TikTok cần tăng tim:");
   }
 
-  if (text === "👤 Tăng Follow") {
-    return bot.sendMessage(chatId, "📎 Gửi link TikTok cần tăng follow:");
+  else if (text === "👤 Tăng Follow") {
+    userState[chatId] = "follow";
+    bot.sendMessage(chatId, "📎 Gửi link TikTok cần tăng follow:");
   }
 
-  // 🔥 xử lý link
-  if (text.includes("tiktok.com")) {
+  else if (text === "📊 Thống kê") {
+    bot.sendMessage(chatId, `👥 Tổng user: ${Object.keys(users).length}`);
+  }
+
+  // 👉 xử lý link
+  else if (text.includes("tiktok.com")) {
+
+    if (!userState[chatId]) {
+      bot.sendMessage(chatId, "⚠️ Hãy chọn dịch vụ trước!");
+      return;
+    }
+
     bot.sendMessage(chatId, "⏳ Đang xử lý...");
 
     setTimeout(() => {
-      const random = Math.floor(Math.random() * 5000) + 1000;
+
+      let amount = Math.floor(Math.random() * 5000) + 1000;
+
+      let typeText = "";
+      if (userState[chatId] === "view") typeText = "👁 View";
+      if (userState[chatId] === "like") typeText = "❤️ Tim";
+      if (userState[chatId] === "follow") typeText = "👤 Follow";
 
       bot.sendMessage(chatId,
-        `✅ Hoàn tất!\n+${random} (demo)`
+`✅ Tăng thành công!
+${typeText}: +${amount}
+⏱ Thời gian: ${Math.floor(Math.random()*5)+1} phút`
       );
+
+      userState[chatId] = null;
+
     }, 2000);
   }
 });
