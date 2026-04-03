@@ -1,102 +1,99 @@
-require('dotenv').config();
-const TelegramBot = require('node-telegram-bot-api');
-const express = require('express');
+const TelegramBot = require("node-telegram-bot-api");
+require("dotenv").config();
 
 const bot = new TelegramBot(process.env.BOT_TOKEN, { polling: true });
 
-// ==== CONFIG ====
-const CHANNEL_ID = process.env.CHANNEL_ID; // -100xxxx
-let users = new Set();
+const step = {};
+const userData = {};
 
-// ==== WEB SERVER (fix lỗi Render) ====
-const app = express();
-app.get('/', (req, res) => {
-  res.send('Bot đang chạy 🚀');
-});
-app.listen(process.env.PORT || 3000);
-
-// ==== MENU ====
-const menu = {
-  reply_markup: {
-    keyboard: [
-      ['📈 Tăng View', '❤️ Tăng Tim'],
-      ['👤 Tăng Follow'],
-      ['📊 Thống kê']
-    ],
-    resize_keyboard: true
-  }
-};
-
-// ==== START ====
+// 🔥 MENU
 bot.onText(/\/start/, (msg) => {
-  users.add(msg.from.id);
+    const chatId = msg.chat.id;
 
-  bot.sendMessage(msg.chat.id,
-    "🔥 TikTok Boost Bot\nChọn dịch vụ:",
-    menu
-  );
+    bot.sendMessage(chatId, "🔥 TikTok Boost Bot\nChọn dịch vụ:", {
+        reply_markup: {
+            keyboard: [
+                ["👤 Tăng Follow"],
+                ["📈 Tăng View", "❤️ Tăng Tim"]
+            ],
+            resize_keyboard: true
+        }
+    });
 });
 
-// ==== HANDLE BUTTON ====
-bot.on('message', async (msg) => {
-  const chatId = msg.chat.id;
-  const text = msg.text;
+// 🔥 CHỌN FOLLOW
+bot.onText(/Tăng Follow/, (msg) => {
+    const chatId = msg.chat.id;
 
-  if (!text) return;
+    step[chatId] = "wait_link";
+    bot.sendMessage(chatId, "🔗 Gửi link TikTok cần tăng follow:");
+});
 
-  // ==== THỐNG KÊ ====
-  if (text === '📊 Thống kê') {
-    return bot.sendMessage(chatId, `👥 Tổng user: ${users.size}`);
-  }
+// 🔥 HANDLE MESSAGE
+bot.on("message", async (msg) => {
+    const chatId = msg.chat.id;
+    const text = msg.text;
 
-  // ==== VIEW ====
-  if (text === '📈 Tăng View') {
-    return bot.sendMessage(chatId, '📎 Gửi link TikTok cần tăng view:');
-  }
+    if (!text) return;
 
-  // ==== TIM ====
-  if (text === '❤️ Tăng Tim') {
-    return bot.sendMessage(chatId, '📎 Gửi link TikTok cần tăng tim:');
-  }
+    // 👉 STEP 1: LINK
+    if (step[chatId] === "wait_link") {
 
-  // ==== FOLLOW ====
-  if (text === '👤 Tăng Follow') {
-    return bot.sendMessage(chatId, '📎 Gửi link TikTok cần tăng follow:');
-  }
+        if (!text.includes("tiktok.com")) {
+            return bot.sendMessage(chatId, "❌ Link không hợp lệ!");
+        }
 
-  // ==== HANDLE LINK ====
-  if (text.includes('tiktok.com')) {
-    bot.sendMessage(chatId, '⏳ Đang xử lý...');
+        userData[chatId] = { link: text };
+        step[chatId] = "wait_amount";
 
-    // random fake số
-    const view = Math.floor(Math.random() * 5000) + 1000;
-    const like = Math.floor(Math.random() * 3000) + 500;
-    const time = Math.floor(Math.random() * 5) + 2;
-
-    // gửi về user
-    bot.sendMessage(chatId,
-`✅ Thành công!
-👁 View: +${view}
-❤️ Tim: +${like}
-⏱ Thời gian: ${time} phút`
-    );
-
-    // ==== GỬI LOG VỀ KÊNH ====
-    if (CHANNEL_ID) {
-      try {
-        bot.sendMessage(CHANNEL_ID,
-`📢 Có user dùng bot
-
-👤 ID: ${msg.from.id}
-🔗 Link: ${text}
-
-👁 +${view} view
-❤️ +${like} tim
-⏱ ${time} phút`
-        );
-      } catch (err) {
-        console.log("Lỗi gửi kênh:", err.message);
-      }
+        return bot.sendMessage(chatId, "🔢 Nhập số lượng (10 - 100000):");
     }
-  }
+
+    // 👉 STEP 2: SỐ LƯỢNG
+    if (step[chatId] === "wait_amount") {
+
+        const amount = parseInt(text);
+
+        if (isNaN(amount) || amount < 10 || amount > 100000) {
+            return bot.sendMessage(chatId, "❌ Nhập số từ 10 - 100000");
+        }
+
+        userData[chatId].amount = amount;
+
+        // 💰 GIÁ TEST (2.1$/1000)
+        const pricePer1000 = 2.1;
+        const total = (amount / 1000) * pricePer1000;
+
+        userData[chatId].price = total.toFixed(2);
+
+        step[chatId] = "confirm";
+
+        return bot.sendMessage(chatId,
+`📦 XÁC NHẬN ĐƠN
+
+🔗 Link: ${userData[chatId].link}
+👤 Số lượng: ${amount}
+💰 Giá: ${userData[chatId].price}$
+
+👉 Gõ "ok" để chạy`);
+    }
+
+    // 👉 STEP 3: CONFIRM
+    if (step[chatId] === "confirm") {
+
+        if (text.toLowerCase() !== "ok") return;
+
+        bot.sendMessage(chatId, "⏳ Đang xử lý...");
+
+        // ❌ TEST FAKE (chưa gọi API)
+        setTimeout(() => {
+            bot.sendMessage(chatId,
+`✅ Test thành công!
+👤 Follow: +${userData[chatId].amount}
+💰 Giá: ${userData[chatId].price}$
+⏱️ Thời gian: 1-5 phút`);
+        }, 2000);
+
+        step[chatId] = null;
+    }
 });
