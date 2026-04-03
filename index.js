@@ -1,50 +1,30 @@
-const TelegramBot = require("node-telegram-bot-api");
+const TelegramBot = require('node-telegram-bot-api');
 
-// Lấy token từ env (Render)
-const TOKEN = process.env.TOKEN;
+const token = process.env.BOT_TOKEN;
+const bot = new TelegramBot(token, { polling: true });
 
-// Tạo bot polling
-const bot = new TelegramBot(TOKEN, {
-  polling: {
-    interval: 300,
-    autoStart: true,
-    params: {
-      timeout: 10
-    }
-  }
-});
-
-// Anti crash
-process.on("uncaughtException", (err) => {
-  console.log("Lỗi:", err.message);
-});
-
-process.on("unhandledRejection", (err) => {
-  console.log("Lỗi promise:", err);
-});
-
-// Log khi start
-console.log("🤖 Bot đang chạy...");
-
-// Test reply
-bot.on("message", (msg) => {
-  const chatId = msg.chat.id;
-
-  bot.sendMessage(chatId, "OK bot hoạt động 🚀");
-});
-
-// Command mẫu
+// Lệnh start
 bot.onText(/\/start/, (msg) => {
-  bot.sendMessage(msg.chat.id, "Bot đã sẵn sàng 😎");
-});
-const express = require("express");
-const app = express();
-
-app.get("/", (req, res) => {
-  res.send("Bot is running");
+    bot.sendMessage(msg.chat.id, "Gửi link TikTok để boost 🚀");
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log("Web server running on port", PORT);
+// Nhận mọi tin nhắn
+bot.on('message', (msg) => {
+    const text = msg.text;
+
+    // Bỏ qua /start
+    if (text.startsWith("/")) return;
+
+    // Check link TikTok
+    if (text.includes("tiktok.com")) {
+        bot.sendMessage(msg.chat.id, "✅ Đã nhận link TikTok!\nĐang xử lý...");
+        
+        // Demo fake boost
+        setTimeout(() => {
+            bot.sendMessage(msg.chat.id, "🚀 Boost thành công (demo)");
+        }, 2000);
+
+    } else {
+        bot.sendMessage(msg.chat.id, "❌ Gửi link TikTok hợp lệ");
+    }
 });
